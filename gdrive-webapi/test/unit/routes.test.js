@@ -32,8 +32,6 @@ describe('src :: routes', () => {
   });
   
   describe('#handler', () => {
-    
-
     test('given an inexistent route it choose #defaultRoute', async () => {
       const routes = new Routes();
       const params = {
