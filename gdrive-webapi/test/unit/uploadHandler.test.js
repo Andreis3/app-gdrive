@@ -110,5 +110,90 @@ describe('#UploadHandler test suit', () => {
       expect(onWrite).toBeCalledTimes(messages.length);
       expect(onWrite.mock.calls.join()).toEqual(messages.join());
     });
+
+    test('given message timerDelay as 2secs it should emit only two messages during 3 seconds period', async() => {
+      jest.spyOn(ioObj, ioObj.emit.name);
+      
+      
+      const day = '2021-07-01 01:01';
+
+      const onInitVariable = TestUtil.getTimeFromDate(`${day}:00`);
+      const onFirstCanExecute = TestUtil.getTimeFromDate(`${day}:02`);
+      const onSecondUpdateLastMessageSent = onFirstCanExecute;
+      const onSecondCanExecute = TestUtil.getTimeFromDate(`${day}:03`);
+      const onThirdCanExecute = TestUtil.getTimeFromDate(`${day}:04`);
+
+
+      TestUtil.mockDateNow(
+        [
+          onInitVariable,
+          onFirstCanExecute,
+          onSecondUpdateLastMessageSent,
+          onSecondCanExecute,
+          onThirdCanExecute
+        ]
+      );
+      
+      const messages = ['hello', 'hello', 'world'];
+      const filename = 'filename.avi';
+      const expectedMessageSent = 2;
+
+      const source = TestUtil.generateReadableStream(messages);
+      const messageTimeDelay = 2000;
+      const handler = new UploadHandler({
+        messageTimeDelay,
+        io: ioObj,
+        socketId: '01'
+      });
+
+      await pipeline(
+        source,
+        handler.handleFileBytes(filename)
+      );
+
+      expect(ioObj.emit).toHaveBeenCalledTimes(expectedMessageSent);
+
+      const [firstCallResult, secondCallResult] = ioObj.emit.mock.calls;
+
+      expect(firstCallResult).toEqual([handler.ON_UPLOAD_EVENT, { processedAlready: 'hello'.length, filename}]);
+      expect(secondCallResult).toEqual([handler.ON_UPLOAD_EVENT, { processedAlready: messages.join('').length, filename}]);
+    });
+    
+  });
+
+  describe('#canExecute', () => {    
+    test('should return true when time is later than specified delay', () => {
+      const timerDelay = 1000;
+      const uploadHandler = new UploadHandler({
+        io: {},
+        socketId: '',
+        messageTimeDelay: timerDelay,
+      });
+
+      const tickNow = TestUtil.getTimeFromDate('2021-07-01 00:00:03');
+      TestUtil.mockDateNow([tickNow]);
+      const lastExecution = TestUtil.getTimeFromDate('2021-07-01 00:00:00');
+
+      const result = uploadHandler.canExecute(lastExecution);
+
+      expect(result).toBeTruthy();
+    });
+
+    test('should return false when time isnt later than specified delay', () => {
+      const timerDelay = 3000;
+      const uploadHandler = new UploadHandler({
+        io: {},
+        socketId: '',
+        messageTimeDelay: timerDelay,
+      });
+
+      const now = TestUtil.getTimeFromDate('2021-07-01 00:00:01');
+      TestUtil.mockDateNow([now]);
+      const lastExecution = TestUtil.getTimeFromDate('2021-07-01 00:00:00');
+
+      const result = uploadHandler.canExecute(lastExecution);
+
+      expect(result).toBeFalsy();
+    });
   });
 });
